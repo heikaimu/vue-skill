@@ -1,37 +1,74 @@
+/*
+ * @Description:
+ * @Version: 2.0
+ * @Autor: Yaowen Liu
+ * @Date: 2020-07-06 17:28:58
+ * @LastEditors: Yaowen Liu
+ * @LastEditTime: 2020-07-06 18:31:26
+ */
 import Vue from 'vue';
+import { throttle } from '../utils/tool';
 
-const notifyVisibilityChange = (lifeCycleName, vm) => {
+/**
+ * 窗口显示或隐藏
+ * pageHidden,pageVisible
+ * @param {*} vm
+ * @param {*} lifeCycleName
+ */
+const notifyVisibilityChange = (vm, lifeCycleName) => {
   const lifeCycles = vm.$options[lifeCycleName];
+
   if (lifeCycles && lifeCycles.length) {
-    // 遍历所有生命周期，然后依次执行
     lifeCycles.forEach(lifecycle => {
       lifecycle.call(vm);
     });
   }
-
-  // 遍历子组件
   if (vm.$children && vm.$children.length) {
     vm.$children.forEach(child => {
-      notifyVisibilityChange(lifeCycleName, child);
+      notifyVisibilityChange(child, lifeCycleName);
     });
   }
 };
 
 /**
- * 添加生命周期钩子函数
+ * 窗口尺寸变化
+ * windowResize
+ * @param {*} vm
+ * @param {*} lifeCycleName
  */
-export const init = () => {
-  const optionMergeStrategies = Vue.config.optionMergeStrategies;
-  // 表示合并方策略和其他生命周期钩子函数一样
-  optionMergeStrategies.pageVisible = optionMergeStrategies.created;
-  optionMergeStrategies.pageHidden = optionMergeStrategies.created;
+const notifyWindowResize = (vm, lifeCycleName, windowWidth) => {
+  const lifeCycles = vm.$options[lifeCycleName];
+
+  if (lifeCycles && lifeCycles.length) {
+    lifeCycles.forEach(lifecycle => {
+      lifecycle.call(vm, windowWidth);
+    });
+  }
+  if (vm.$children && vm.$children.length) {
+    vm.$children.forEach(child => {
+      notifyWindowResize(child, lifeCycleName, windowWidth);
+    });
+  }
 };
 
 /**
- * 给vm根节点绑定visibility事件
- * @param {*} rootVm
+ * 添加新的生命周期钩子函数
+ */
+export const init = () => {
+  const optionMergeStrategies = Vue.config.optionMergeStrategies;
+  // 添加窗口隐藏、显示的生命周期钩子函，合并策略同其他生命周期钩子函数一致
+  optionMergeStrategies.pageHidden = optionMergeStrategies.created;
+  optionMergeStrategies.pageVisible = optionMergeStrategies.created;
+  // 添加窗口尺寸变化生命周期钩子
+  optionMergeStrategies.windowResize = optionMergeStrategies.created;
+};
+
+/**
+ * 事件触发后从根结点开始通知
+ * @param {*} rootVm 根节点
  */
 export const bind = (rootVm) => {
+  // 判断窗口是否显示
   window.addEventListener('visibilitychange', () => {
     let lifeCycleName;
     if (document.visibilityState === 'hidden') {
@@ -39,8 +76,15 @@ export const bind = (rootVm) => {
     } else if (document.visibilityState === 'visible') {
       lifeCycleName = 'pageVisible';
     }
+
     if (lifeCycleName) {
-      notifyVisibilityChange(lifeCycleName, rootVm);
+      notifyVisibilityChange(rootVm, lifeCycleName);
     }
   });
+
+  // 窗口变化，添加节流函数
+  window.addEventListener('resize', throttle(function() {
+    notifyWindowResize(rootVm, 'windowResize', window.innerWidth);
+  }, 300));
 };
+
